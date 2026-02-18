@@ -77,16 +77,23 @@ export async function selectItems(
       out.push('');
 
       // calculate column widths
-      const maxPathLen = Math.min(
-        50,
-        Math.max(...items.map((i) => i.relativePath.length + 1)),
-      );
+      const termWidth = process.stdout.columns || 80;
       const maxSizeLen = Math.max(
         ...items.map((i) => formatSize(i.size).length),
       );
       const maxCountLen = Math.max(
         ...items.map((i) => (formatCount(i.fileCount) + ' files').length),
       );
+      const maxDescLen = Math.max(
+        ...items.map((i) => i.description.length),
+      );
+      // line layout: "  [✓]  path  size  count  desc"
+      // fixed chars:  2 + 3 + 2 + 2 + 2 + 2 + 2 = 15
+      const availablePathLen = termWidth - 15 - maxSizeLen - maxCountLen - maxDescLen;
+      const actualMaxPathLen = Math.max(
+        ...items.map((i) => i.relativePath.length + 1),
+      );
+      const maxPathLen = Math.max(10, Math.min(actualMaxPathLen, availablePathLen));
 
       // ensure cursor is visible
       if (cursor < scrollOffset) scrollOffset = cursor;
