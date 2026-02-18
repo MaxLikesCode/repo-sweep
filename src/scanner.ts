@@ -1,9 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
 
 export interface ScanResult {
   path: string;
@@ -109,33 +105,24 @@ async function findArtifacts(
 }
 
 async function getDirStats(
-  dirPath: string,
+  dir: string,
 ): Promise<{ size: number; fileCount: number }> {
-  try {
-    const [duResult, fileCount] = await Promise.all([
-      execFileAsync('du', ['-sk', dirPath]).then((r) => {
-        const kb = parseInt(r.stdout.split('\t')[0].trim(), 10);
-        return kb * 1024;
-      }),
-      countFiles(dirPath),
-    ]);
-    return { size: duResult, fileCount };
-  } catch {
-    return { size: 0, fileCount: 0 };
-  }
-}
-
-async function countFiles(dir: string): Promise<number> {
-  let count = 0;
+  let size = 0;
+  let fileCount = 0;
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
       if (entry.isFile() || entry.isSymbolicLink()) {
-        count++;
+        fileCount++;
+        const s = await stat(fullPath);
+        size += s.size;
       } else if (entry.isDirectory()) {
-        count += await countFiles(join(dir, entry.name));
+        const sub = await getDirStats(fullPath);
+        size += sub.size;
+        fileCount += sub.fileCount;
       }
     }
   } catch {}
-  return count;
+  return { size, fileCount };
 }
