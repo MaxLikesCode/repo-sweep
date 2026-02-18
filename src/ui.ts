@@ -211,7 +211,6 @@ export async function selectItems(
       // space - toggle
       if (key === ' ') {
         selected[cursor] = !selected[cursor];
-        cursor = Math.min(items.length - 1, cursor + 1);
       }
 
       // a - select all
