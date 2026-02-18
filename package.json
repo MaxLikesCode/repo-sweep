@@ -3,13 +3,28 @@
   "version": "1.0.0",
   "description": "Clean build artifacts from project directories before transferring",
   "type": "module",
+  "license": "MIT",
   "bin": {
     "repo-sweep": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "cleanup",
+    "node_modules",
+    "build-artifacts",
+    "disk-space",
+    "cli"
+  ],
   "scripts": {
     "start": "npx tsx src/index.ts",
     "build": "tsc",
-    "sweep": "npx tsx src/index.ts"
+    "sweep": "npx tsx src/index.ts",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "typescript": "^5.3.0",

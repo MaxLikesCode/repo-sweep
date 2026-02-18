@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { resolve } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
