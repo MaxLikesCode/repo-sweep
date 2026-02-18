@@ -49,15 +49,56 @@ const PATTERNS: Record<string, string> = {
   release: 'Release builds',
 };
 
+const CATEGORIES: Record<string, string[]> = {
+  node:     ['node_modules', 'bower_components', '.pnpm-store'],
+  python:   ['.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.tox', '.eggs'],
+  rust:     ['target'],
+  ios:      ['Pods', 'DerivedData'],
+  frontend: ['.next', '.nuxt', '.output', '.svelte-kit', '.angular', '.astro', '.docusaurus', '.expo'],
+  cache:    ['.cache', '.parcel-cache', '.turbo', '.webpack', '.sass-cache', '.dart_tool', '.gradle', '.terraform', '.playwright'],
+  build:    ['build', 'dist', 'out', 'release', 'coverage'],
+  deploy:   ['.vercel', '.serverless'],
+};
+
+export function getCategories(): Record<string, string[]> {
+  return CATEGORIES;
+}
+
 const SKIP_DIRS = new Set(['.git']);
 const MIN_SIZE = 100 * 1024; // 100 KB
+
+export interface ScanFilter {
+  only?: string[];
+  exclude?: string[];
+}
+
+function buildAllowedPatterns(filter?: ScanFilter): Set<string> | null {
+  if (!filter?.only && !filter?.exclude) return null;
+
+  if (filter.only) {
+    const allowed = new Set<string>();
+    for (const cat of filter.only) {
+      for (const p of CATEGORIES[cat] ?? []) allowed.add(p);
+    }
+    return allowed;
+  }
+
+  // exclude: start with all patterns, remove excluded
+  const allowed = new Set(Object.keys(PATTERNS));
+  for (const cat of filter.exclude!) {
+    for (const p of CATEGORIES[cat] ?? []) allowed.delete(p);
+  }
+  return allowed;
+}
 
 export async function scan(
   rootDir: string,
   onProgress?: (msg: string) => void,
+  filter?: ScanFilter,
 ): Promise<ScanResult[]> {
+  const allowed = buildAllowedPatterns(filter);
   const results: ScanResult[] = [];
-  await findArtifacts(rootDir, rootDir, results, onProgress, 0);
+  await findArtifacts(rootDir, rootDir, results, onProgress, 0, allowed);
   results.sort((a, b) => b.size - a.size);
   return results.filter((r) => r.size >= MIN_SIZE);
 }
@@ -68,6 +109,7 @@ async function findArtifacts(
   results: ScanResult[],
   onProgress?: (msg: string) => void,
   depth: number = 0,
+  allowed?: Set<string> | null,
 ): Promise<void> {
   let entries;
   try {
@@ -83,7 +125,7 @@ async function findArtifacts(
 
     if (SKIP_DIRS.has(entry.name)) continue;
 
-    if (PATTERNS[entry.name]) {
+    if (PATTERNS[entry.name] && (!allowed || allowed.has(entry.name))) {
       if (depth === 0) onProgress?.(`Checking ${entry.name}/`);
       else onProgress?.(`Checking ${relative(rootDir, fullPath)}`);
 
@@ -100,7 +142,7 @@ async function findArtifacts(
 
     if (depth === 0) onProgress?.(`Scanning ${entry.name}/`);
 
-    await findArtifacts(fullPath, rootDir, results, onProgress, depth + 1);
+    await findArtifacts(fullPath, rootDir, results, onProgress, depth + 1, allowed);
   }
 }
 

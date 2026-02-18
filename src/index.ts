@@ -2,7 +2,8 @@
 import { resolve } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
-import { scan } from './scanner.js';
+import { scan, getCategories } from './scanner.js';
+import type { ScanFilter } from './scanner.js';
 import { selectItems, formatSize } from './ui.js';
 
 const C = {
@@ -21,21 +22,88 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.includes('-h') || args.includes('--help')) {
+    const cats = Object.keys(getCategories()).join(', ');
     console.log(`
   ${C.cyan}${C.bold}repo-sweep${C.reset} - Clean build artifacts from project directories
 
   ${C.bold}Usage:${C.reset}
-    repo-sweep [directory]
+    repo-sweep [directory] [options]
 
   ${C.bold}Options:${C.reset}
-    -h, --help     Show this help message
+    -h, --help             Show this help message
+    --only <categories>    Only scan these categories (comma-separated)
+    --exclude <categories> Skip these categories (comma-separated)
+    --list-categories      List all available categories
+
+  ${C.bold}Categories:${C.reset} ${cats}
 
   ${C.dim}If no directory is specified, the current directory is used.${C.reset}
 `);
     process.exit(0);
   }
 
-  const targetDir = resolve(args[0] || '.');
+  if (args.includes('--list-categories')) {
+    const categories = getCategories();
+    console.log(`\n  ${C.bold}Available categories:${C.reset}\n`);
+    for (const [name, patterns] of Object.entries(categories)) {
+      console.log(`  ${C.cyan}${C.bold}${name}${C.reset}  ${C.dim}${patterns.join(', ')}${C.reset}`);
+    }
+    console.log('');
+    process.exit(0);
+  }
+
+  // parse --only and --exclude
+  const validCategories = new Set(Object.keys(getCategories()));
+  let filter: ScanFilter | undefined;
+
+  const onlyIdx = args.indexOf('--only');
+  const excludeIdx = args.indexOf('--exclude');
+
+  if (onlyIdx !== -1 && excludeIdx !== -1) {
+    console.error(`${C.red}Error: --only and --exclude cannot be used together${C.reset}`);
+    process.exit(1);
+  }
+
+  if (onlyIdx !== -1) {
+    const val = args[onlyIdx + 1];
+    if (!val || val.startsWith('--')) {
+      console.error(`${C.red}Error: --only requires a comma-separated list of categories${C.reset}`);
+      process.exit(1);
+    }
+    const cats = val.split(',');
+    for (const cat of cats) {
+      if (!validCategories.has(cat)) {
+        console.error(`${C.red}Error: Unknown category "${cat}". Valid: ${[...validCategories].join(', ')}${C.reset}`);
+        process.exit(1);
+      }
+    }
+    filter = { only: cats };
+  }
+
+  if (excludeIdx !== -1) {
+    const val = args[excludeIdx + 1];
+    if (!val || val.startsWith('--')) {
+      console.error(`${C.red}Error: --exclude requires a comma-separated list of categories${C.reset}`);
+      process.exit(1);
+    }
+    const cats = val.split(',');
+    for (const cat of cats) {
+      if (!validCategories.has(cat)) {
+        console.error(`${C.red}Error: Unknown category "${cat}". Valid: ${[...validCategories].join(', ')}${C.reset}`);
+        process.exit(1);
+      }
+    }
+    filter = { exclude: cats };
+  }
+
+  // find directory argument (first arg that isn't a flag or flag value)
+  const flagIndices = new Set<number>();
+  for (const flag of ['--only', '--exclude']) {
+    const idx = args.indexOf(flag);
+    if (idx !== -1) { flagIndices.add(idx); flagIndices.add(idx + 1); }
+  }
+  const dirArg = args.find((a, i) => !flagIndices.has(i) && !a.startsWith('-'));
+  const targetDir = resolve(dirArg || '.');
 
   if (!existsSync(targetDir) || !statSync(targetDir).isDirectory()) {
     console.error(`${C.red}Error: "${targetDir}" is not a valid directory${C.reset}`);
@@ -55,7 +123,7 @@ async function main() {
 
   const results = await scan(targetDir, (msg) => {
     spinnerMsg = msg;
-  });
+  }, filter);
 
   clearInterval(spinnerInterval);
   process.stdout.write('\r\x1b[K');
