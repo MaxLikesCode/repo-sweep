@@ -1,9 +1,17 @@
 {
   "name": "repo-sweep",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Clean build artifacts from project directories before transferring",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaxLikesCode/repo-sweep.git"
+  },
+  "homepage": "https://github.com/MaxLikesCode/repo-sweep#readme",
+  "bugs": {
+    "url": "https://github.com/MaxLikesCode/repo-sweep/issues"
+  },
   "bin": {
     "repo-sweep": "./dist/index.js"
   },
