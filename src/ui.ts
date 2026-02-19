@@ -36,6 +36,15 @@ function formatCount(n: number): string {
   return n.toLocaleString('en-US');
 }
 
+function formatAge(date: Date): string {
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days < 1) return 'today';
+  if (days === 1) return '1d ago';
+  if (days < 60) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 function padRight(str: string, len: number): string {
   if (str.length >= len) return str;
   return str + ' '.repeat(len - str.length);
@@ -85,7 +94,7 @@ export async function selectItems(
         ...items.map((i) => (formatCount(i.fileCount) + ' files').length),
       );
       const maxDescLen = Math.max(
-        ...items.map((i) => i.description.length),
+        ...items.map((i) => `${i.description} · ${formatAge(i.lastModified)}`.length),
       );
       // line layout: "  [✓]  path  size  count  desc"
       // fixed chars:  2 + 3 + 2 + 2 + 2 + 2 + 2 = 15
@@ -132,7 +141,8 @@ export async function selectItems(
           formatCount(item.fileCount) + ' files',
           maxCountLen,
         );
-        const desc = item.description;
+        const age = formatAge(item.lastModified);
+        const desc = `${item.description} · ${age}`;
 
         let line = `  ${checkbox}  ${padRight(displayPath, maxPathLen)}  ${C.yellow}${size}${C.reset}  ${C.blue}${count}${C.reset}  ${C.dim}${desc}${C.reset}`;
 

@@ -18,6 +18,17 @@ const C = {
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+function parseDuration(val: string): number | null {
+  const m = val.match(/^(\d+)(d|w|m)$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  const unit = m[2];
+  if (unit === 'd') return n * 86400000;
+  if (unit === 'w') return n * 7 * 86400000;
+  if (unit === 'm') return n * 30 * 86400000;
+  return null;
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -33,6 +44,7 @@ async function main() {
     -h, --help             Show this help message
     --only <categories>    Only scan these categories (comma-separated)
     --exclude <categories> Skip these categories (comma-separated)
+    --stale <duration>     Only show artifacts from inactive projects (e.g. 30d, 2w, 3m)
     --list-categories      List all available categories
 
   ${C.bold}Categories:${C.reset} ${cats}
@@ -96,9 +108,25 @@ async function main() {
     filter = { exclude: cats };
   }
 
+  const staleIdx = args.indexOf('--stale');
+  if (staleIdx !== -1) {
+    const val = args[staleIdx + 1];
+    if (!val || val.startsWith('--')) {
+      console.error(`${C.red}Error: --stale requires a duration (e.g. 30d, 2w, 3m)${C.reset}`);
+      process.exit(1);
+    }
+    const ms = parseDuration(val);
+    if (ms === null) {
+      console.error(`${C.red}Error: Invalid duration "${val}". Use a number followed by d (days), w (weeks), or m (months)${C.reset}`);
+      process.exit(1);
+    }
+    if (!filter) filter = {};
+    filter.staleMs = ms;
+  }
+
   // find directory argument (first arg that isn't a flag or flag value)
   const flagIndices = new Set<number>();
-  for (const flag of ['--only', '--exclude']) {
+  for (const flag of ['--only', '--exclude', '--stale']) {
     const idx = args.indexOf(flag);
     if (idx !== -1) { flagIndices.add(idx); flagIndices.add(idx + 1); }
   }

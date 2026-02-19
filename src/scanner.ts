@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, dirname, basename } from 'node:path';
 
 export interface ScanResult {
   path: string;
@@ -7,6 +7,7 @@ export interface ScanResult {
   size: number;
   fileCount: number;
   description: string;
+  lastModified: Date;
 }
 
 const PATTERNS: Record<string, string> = {
@@ -70,6 +71,7 @@ const MIN_SIZE = 100 * 1024; // 100 KB
 export interface ScanFilter {
   only?: string[];
   exclude?: string[];
+  staleMs?: number;
 }
 
 function buildAllowedPatterns(filter?: ScanFilter): Set<string> | null {
@@ -97,10 +99,15 @@ export async function scan(
   filter?: ScanFilter,
 ): Promise<ScanResult[]> {
   const allowed = buildAllowedPatterns(filter);
-  const results: ScanResult[] = [];
+  let results: ScanResult[] = [];
   await findArtifacts(rootDir, rootDir, results, onProgress, 0, allowed);
   results.sort((a, b) => b.size - a.size);
-  return results.filter((r) => r.size >= MIN_SIZE);
+  results = results.filter((r) => r.size >= MIN_SIZE);
+  if (filter?.staleMs) {
+    const cutoff = Date.now() - filter.staleMs;
+    results = results.filter((r) => r.lastModified.getTime() < cutoff);
+  }
+  return results;
 }
 
 async function findArtifacts(
@@ -130,12 +137,14 @@ async function findArtifacts(
       else onProgress?.(`Checking ${relative(rootDir, fullPath)}`);
 
       const stats = await getDirStats(fullPath);
+      const lastModified = await getProjectLastModified(fullPath);
       results.push({
         path: fullPath,
         relativePath: relative(rootDir, fullPath),
         size: stats.size,
         fileCount: stats.fileCount,
         description: PATTERNS[entry.name],
+        lastModified,
       });
       continue; // don't recurse into matched dirs
     }
@@ -144,6 +153,23 @@ async function findArtifacts(
 
     await findArtifacts(fullPath, rootDir, results, onProgress, depth + 1, allowed);
   }
+}
+
+async function getProjectLastModified(artifactPath: string): Promise<Date> {
+  const parentDir = dirname(artifactPath);
+  const artifactName = basename(artifactPath);
+  let latest = new Date(0);
+  try {
+    const entries = await readdir(parentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === artifactName) continue;
+      if (SKIP_DIRS.has(entry.name)) continue;
+      if (PATTERNS[entry.name]) continue;
+      const s = await stat(join(parentDir, entry.name));
+      if (s.mtime > latest) latest = s.mtime;
+    }
+  } catch {}
+  return latest;
 }
 
 async function getDirStats(
