@@ -38,6 +38,12 @@ repo-sweep --only node,python
 # Clean everything except build output
 repo-sweep --exclude build
 
+# Only show artifacts from projects inactive for 30+ days
+repo-sweep --stale 30d
+
+# Combine filters: only Node.js artifacts from inactive projects
+repo-sweep --only node --stale 2w
+
 # List all available categories
 repo-sweep --list-categories
 ```
@@ -75,6 +81,12 @@ Filter what gets scanned with `--only` or `--exclude`:
 | `cache` | .cache, .parcel-cache, .turbo, .webpack, .sass-cache, .dart_tool, .gradle, .terraform, .playwright |
 | `build` | build, dist, out, release, coverage |
 | `deploy` | .vercel, .serverless |
+
+## Stale project filtering
+
+Use `--stale` to only target artifacts from projects you haven't worked on recently. The duration supports `d` (days), `w` (weeks), and `m` (months).
+
+Activity is determined by checking the last modification time of files in the project directory (ignoring the artifact itself and `.git`).
 
 Only artifacts larger than 100 KB are shown.
 
